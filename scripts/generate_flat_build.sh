@@ -526,13 +526,7 @@ generate_ptool_from_platform() {
         echo "$disk_type" > disk_type
         dbg "[ptool:$platform_dir] disk_type=$disk_type esp_ref=$esp_ref rootfs_ref=$rootfs_ref"
 
-        # Build partition map for gen_partition.py -m flag.
-        # Format: "name1=file1,name2=file2,..."  (same as qcom-deb-images gen-ptool.sh)
-        local cdt_base=""
-        [[ -n "$cdt_board_file" ]] && cdt_base="$(basename "$cdt_board_file")"
-
         local partition_map=""
-        [[ -n "$cdt_base"     ]] && partition_map="${partition_map:+${partition_map},}cdt=${cdt_base}"
         [[ -n "$dtb_basename" ]] && partition_map="${partition_map:+${partition_map},}dtb_a=${dtb_basename},dtb_b=${dtb_basename}"
         [[ -n "$esp_ref"      ]] && partition_map="${partition_map:+${partition_map},}efi=${esp_ref}"
         [[ -n "$rootfs_ref"   ]] && partition_map="${partition_map:+${partition_map},}rootfs=${rootfs_ref}"
@@ -614,24 +608,20 @@ fi
 
 QCOM_PTOOL_DIR="$(ensure_qcom_ptool)"
 
-# Download ONLY for selected boards
 for ((i=0; i<BOARD_COUNT; i++)); do
         name="${BOARD_NAME[i]}"
 
-        # Skip boards not in targets
-        if ! grep -Fxq "$name" "$TARGETS_FILE"; then
-                continue
-        fi
-
-        download_if_needed "${BOOT_URL[i]}" "$DOWNLOADDIR/${BOOT_FILENAME[i]}"
-        if [[ -n "${BOOT_SHA[i]}" ]]; then
-                verify_sha256 "${BOOT_SHA[i]}" "$DOWNLOADDIR/${BOOT_FILENAME[i]}"
-        else
-                if [[ "$ALLOW_MISSING_SHA" == "true" ]]; then
-                        echo "WARNING: No SHA256 provided for ${BOOT_FILENAME[i]} (continuing due to --allow-missing-sha=true)" >&2
+        if grep -Fxq "$name" "$TARGETS_FILE"; then
+                download_if_needed "${BOOT_URL[i]}" "$DOWNLOADDIR/${BOOT_FILENAME[i]}"
+                if [[ -n "${BOOT_SHA[i]}" ]]; then
+                        verify_sha256 "${BOOT_SHA[i]}" "$DOWNLOADDIR/${BOOT_FILENAME[i]}"
                 else
-                        echo "ERROR: No SHA256 provided for ${BOOT_FILENAME[i]}" >&2
-                        exit 10
+                        if [[ "$ALLOW_MISSING_SHA" == "true" ]]; then
+                                echo "WARNING: No SHA256 provided for ${BOOT_FILENAME[i]} (continuing due to --allow-missing-sha=true)" >&2
+                        else
+                                echo "ERROR: No SHA256 provided for ${BOOT_FILENAME[i]}" >&2
+                                exit 10
+                        fi
                 fi
         fi
 
@@ -789,6 +779,12 @@ declare -A BOARD_RESULT BOARD_REASON
 declare -A PLAT_RESULT PLAT_REASON   # key: "board/platform"
 
 for ((i=0; i<BOARD_COUNT; i++)); do
+    if [[ -n "${CDT_FILENAME[i]}" && -f "$DOWNLOADDIR/${CDT_FILENAME[i]}" ]]; then
+        unpack_zip_smart "$DOWNLOADDIR/${CDT_FILENAME[i]}" "${BUILD_DIR}/${BOARD_NAME[i]}_cdt"
+    fi
+done
+
+for ((i=0; i<BOARD_COUNT; i++)); do
     name="${BOARD_NAME[i]}"
     platforms="${BOARD_PLATFORMS[i]}"
     dtb="${BOARD_DTB[i]}"
@@ -825,14 +821,6 @@ for ((i=0; i<BOARD_COUNT; i++)); do
         exit 14
     }
     unpack_zip_smart "$DOWNLOADDIR/${BOOT_FILENAME[i]}" "${BUILD_DIR}/${name}_boot-binaries"
-
-    if [[ -n "${CDT_FILENAME[i]}" ]]; then
-        [[ -f "$DOWNLOADDIR/${CDT_FILENAME[i]}" ]] || {
-            echo "ERROR: Missing CDT zip for $name: $DOWNLOADDIR/${CDT_FILENAME[i]}" >&2
-            exit 15
-        }
-        unpack_zip_smart "$DOWNLOADDIR/${CDT_FILENAME[i]}" "${BUILD_DIR}/${name}_cdt"
-    fi
 
     for platform in $platforms; do
         esp_base=""
@@ -888,19 +876,29 @@ for ((i=0; i<BOARD_COUNT; i++)); do
 
         copy_boot_binaries_filtered "${BUILD_DIR}/${name}_boot-binaries" "$flash_dir"
 
-        if [[ -n "$cdt_board_file" ]]; then
-            if [[ -f "${BUILD_DIR}/${name}_cdt/${cdt_board_file}" ]]; then
-                cp --preserve=mode,timestamps -v \
-                    "${BUILD_DIR}/${name}_cdt/${cdt_board_file}" \
-                    "$flash_dir"
-            elif [[ -f "${BUILD_DIR}/${name}_cdt/$(basename "$cdt_board_file")" ]]; then
-                cp --preserve=mode,timestamps -v \
-                    "${BUILD_DIR}/${name}_cdt/$(basename "$cdt_board_file")" \
-                    "$flash_dir"
-            else
-                echo "WARNING: CDT file not found in unpacked CDT: $cdt_board_file"
+        for ((j=0; j<BOARD_COUNT; j++)); do
+            _bname="${BOARD_NAME[j]}"
+            _f="${CDT_BOARD_FILE[j]}"
+            [[ -z "$_f" ]] && continue
+            _cdt_src=""
+            if [[ -f "${BUILD_DIR}/${_bname}_cdt/${_f}" ]]; then
+                _cdt_src="${BUILD_DIR}/${_bname}_cdt/${_f}"
+            elif [[ -f "${BUILD_DIR}/${_bname}_cdt/$(basename "$_f")" ]]; then
+                _cdt_src="${BUILD_DIR}/${_bname}_cdt/$(basename "$_f")"
             fi
-        fi
+            if [[ -z "$_cdt_src" ]]; then
+                dbg "Skipping CDT for ${_bname} (not downloaded): $_f"
+                continue
+            fi
+            case "$_bname" in
+                qcs6490-rb3gen2-vision-kit)
+                    cp --preserve=mode,timestamps -v "$_cdt_src" "$flash_dir/cdt.bin"
+                    ;;
+                *)
+                    cp --preserve=mode,timestamps -v "$_cdt_src" "$flash_dir"
+                    ;;
+            esac
+        done
 
         if [[ -n "$ESP_VFAT" ]]; then
             cp --preserve=mode,timestamps -v \
