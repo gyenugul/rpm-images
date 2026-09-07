@@ -19,7 +19,7 @@ EXTRA_KIWI_OPTS ?=
 KIWI_PACKAGES_DIR ?= packages
 
 ARTIFACTDIR      ?= build/out
-TARGET_BOARDS    ?= qcs6490-rb3gen2-vision-kit
+TARGET_BOARDS    ?= qcs6490-rb3gen2
 # Set USE_FIT_IMAGE=0 to use single-DTB mode instead of FIT multi-DTB
 USE_FIT_IMAGE    ?= 1
 EXTRA_FLASH_OPTS ?=
