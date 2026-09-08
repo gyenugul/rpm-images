@@ -142,7 +142,7 @@ jobs:
           # build-dtb-image.sh from qcom-dtb-metadata.
           sudo HOME=/tmp make flash \
             KIWI_PROFILE=console \
-            TARGET_BOARDS=qcs6490-rb3gen2-vision-kit \
+            TARGET_BOARDS=qcs6490-rb3gen2 \
             USE_FIT_IMAGE=1 \
             EXTRA_FLASH_OPTS=--verbose=true
 
