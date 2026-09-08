@@ -21,9 +21,11 @@ Generates CentOS Stream 10 (aarch64) disk images for Qualcomm RB3 Gen2 platforms
 
 | Board name | Storage |
 |---|---|
-| `qcs6490-rb3gen2-vision-kit` | UFS |
-| `qcs6490-rb3gen2-core-kit` | UFS |
-| `qcs6490-rb3gen2-industrial-kit` | UFS |
+| `qcs6490-rb3gen2` | UFS |
+
+> All three RB3 Gen2 kit variants (vision-kit, core-kit, industrial-kit) share
+> a single board entry. All CDTs are bundled in the flash directory.
+> `cdt.bin` targets the vision-kit by default. See [CDT Selection](#cdt-selection).
 
 ---
 
@@ -226,7 +228,7 @@ per-board flash directory ready for QDL / PCAT. Drive it through the Makefile:
 make flash
 
 # A specific board
-make flash TARGET_BOARDS=qcs6490-rb3gen2-vision-kit
+make flash TARGET_BOARDS=qcs6490-rb3gen2
 ```
 
 <details>
@@ -249,11 +251,7 @@ Or manually:
 #### Build a subset of boards
 
 ```bash
-# Single board
-make flash TARGET_BOARDS=qcs6490-rb3gen2-vision-kit
-
-# Multiple boards (comma-separated)
-make flash TARGET_BOARDS=qcs6490-rb3gen2-vision-kit,qcs6490-rb3gen2-core-kit
+make flash TARGET_BOARDS=qcs6490-rb3gen2
 ```
 
 #### Key options (`generate_flat_build.sh`)
@@ -275,7 +273,7 @@ these overrides on the command line (see `make help` for the full list):
 | Variable | Default | Description |
 |---|---|---|
 | `ARCH` | `aarch64` | Target architecture passed to kiwi-ng |
-| `TARGET_BOARDS` | `qcs6490-rb3gen2-vision-kit` | Comma-separated boards (or `all`) for `make flash` |
+| `TARGET_BOARDS` | `qcs6490-rb3gen2` | Comma-separated boards (or `all`) for `make flash` |
 | `USE_FIT_IMAGE` | `1` | `1` = FIT multi-DTB image (recommended); `0` = single-DTB VFAT |
 | `ARTIFACTDIR` | `build/out` | Flash package output directory |
 | `EXTRA_FLASH_OPTS` | _unset_ | Extra flags forwarded to `generate_flat_build.sh` |
@@ -286,7 +284,7 @@ these overrides on the command line (see `make help` for the full list):
 ```
 build/out/
 ├── dtb-multidtb.bin              # FIT multi-DTB FAT image (USE_FIT_IMAGE=1)
-└── flash_<board>_<ufs>/
+└── flash_qcs6490-rb3gen2_ufs/
     ├── prog_firehose_ddr_*.elf   # Firehose programmer
     ├── rawprogram*.xml           # Flash programming script
     ├── patch*.xml                # Patch script
@@ -296,9 +294,12 @@ build/out/
     ├── dtb.bin                   # DTB VFAT (FIT multi-DTB or single-DTB)
     ├── dtb-multi-dtb-image.vfat  # FIT multi-DTB alias (USE_FIT_IMAGE=1)
     ├── dtb-<soc>-image.vfat      # SoC-specific DTB alias (USE_FIT_IMAGE=1)
-    ├── cdt_*.bin                 # Board CDT
+    ├── cdt.bin                   # Active CDT (vision-kit default)
+    ├── cdt_core_kit.bin          # Core-kit CDT
+    ├── cdt_industrial_kit.bin    # Industrial-kit CDT
     └── vmlinux                   # Kernel ELF (for crash debugging)
 ```
+
 
 ---
 
