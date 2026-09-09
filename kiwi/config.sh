@@ -19,8 +19,10 @@ echo "UTC" > /etc/timezone
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 # ── Default user ──────────────────────────────────────────────────────────────
+groups=wheel,audio,video,render,users
+getent group fastrpc > /dev/null && groups="${groups},fastrpc"
 useradd --create-home --shell /bin/bash --user-group \
-    --groups wheel,audio,video,render,users qcom
+    --groups "$groups" qcom
 echo "qcom:qcom" | chpasswd
 
 # Force password change on first login
