@@ -43,5 +43,5 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        sudo PIPX_BIN_DIR=/usr/local/bin pipx install kiwi
+        sudo PIPX_BIN_DIR=/usr/local/bin pipx install 'kiwi==11.0.0'
         sudo kiwi-ng --version
