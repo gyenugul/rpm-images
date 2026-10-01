@@ -248,3 +248,17 @@ jobs:
           echo "Downloads URL: ${url}"
           echo "## Download URL" >> $GITHUB_STEP_SUMMARY
           echo "[${url}](${url})" >> $GITHUB_STEP_SUMMARY
+  
+
+  build-successful:
+    name: Build Successful
+    needs: [build-and-flash]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print download URL
+        env:
+          build_url: ${{ needs.build-and-flash.outputs.url }}
+        run: |
+          echo "Downloads URL: ${build_url}"
+          echo "## Download URL" >> $GITHUB_STEP_SUMMARY
+          echo "[${build_url}](${build_url})" >> $GITHUB_STEP_SUMMARY
