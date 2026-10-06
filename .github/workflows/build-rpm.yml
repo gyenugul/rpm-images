@@ -5,7 +5,7 @@ on:
     outputs:
       artifacts_url:
         description: "URL to retrieve build artifacts"
-        value: ${{ jobs.build-and-flash.outputs.url }}
+        value: ${{ jobs.publish-artifacts.outputs.url }}
 
 permissions:
   contents: read
@@ -110,11 +110,13 @@ jobs:
 
 
   build-and-flash:
-    name: Phase 2 - Image, extract & flash packages
+    name: Phase 2 - Image, extract & flash packages (${{ matrix.profile }})
     needs: [kernel-rpm]
     runs-on: [self-hosted, platform-prd-u2404-arm64-large-od-ephem]
-    outputs:
-      url: ${{ steps.url.outputs.url }}
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [console, gnome]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -162,7 +164,7 @@ jobs:
           # USE_FIT_IMAGE=1 (default) generates a FIT multi-DTB image via
           # build-dtb-image.sh from qcom-dtb-metadata.
           sudo HOME=/tmp make flash \
-            KIWI_PROFILE=console \
+            KIWI_PROFILE="${{ matrix.profile }}" \
             TARGET_BOARDS=qcs6490-rb3gen2 \
             USE_FIT_IMAGE=1 \
             EXTRA_FLASH_OPTS=--verbose=true
@@ -184,31 +186,105 @@ jobs:
       - name: Generate SBOM with Syft
         run: |
           set -euo pipefail
-          mkdir -p rootfs-mount
-          sudo mount -o ro build/output/flashimages/rootfs.img rootfs-mount
+          profile="${{ matrix.profile }}"
+          mount_dir="rootfs-mount-${profile}"
+          mkdir -p "${mount_dir}"
+          cleanup() {
+            if mountpoint -q "${mount_dir}"; then
+              sudo umount "${mount_dir}"
+            fi
+          }
+          trap cleanup EXIT
+          sudo mount -o ro build/output/flashimages/rootfs.img "${mount_dir}"
           SYFT_FORMAT_PRETTY=true bin/syft \
-              -o cyclonedx-json=rootfs-sbom.cyclonedx.json \
-              -o spdx-json=rootfs-sbom.spdx.json \
-              -o syft-json=rootfs-sbom.syft.json \
-              -o syft-text=rootfs-sbom.syft.txt \
+              -o "cyclonedx-json=rootfs-sbom-${profile}.cyclonedx.json" \
+              -o "spdx-json=rootfs-sbom-${profile}.spdx.json" \
+              -o "syft-json=rootfs-sbom-${profile}.syft.json" \
+              -o "syft-text=rootfs-sbom-${profile}.syft.txt" \
               -o syft-table \
               --parallelism "$(nproc)" \
               --select-catalogers rpm \
-              --source-name qualcomm-linux-rpm-rootfs \
+              --source-name "qualcomm-linux-rpm-${profile}-rootfs" \
               --source-version "${BUILD_ID}" \
               -v \
-              scan rootfs-mount
-          sudo umount rootfs-mount
+              scan "${mount_dir}"
+          cleanup
+          trap - EXIT
+
+      - name: Stage flash packages for publishing
+        run: |
+          set -euo pipefail
+          profile="${{ matrix.profile }}"
+          mkdir -p rpm-artifacts
+          for d in build/out/flash_*; do
+            [ -d "$d" ] || continue
+            board="$(basename "$d")"
+            tar -czf "rpm-artifacts/${profile}-${board}.tar.gz" -C "$d" .
+          done
+
+      - name: Upload flash package artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rpm-artifacts-${{ matrix.profile }}
+          if-no-files-found: error
+          path: rpm-artifacts
+          retention-days: 1
+
+      - name: Stage SBOMs for publishing
+        run: |
+          set -euo pipefail
+          profile="${{ matrix.profile }}"
+          mkdir -p sboms
+          for f in rootfs-sbom-${profile}.*; do
+            gzip -c "$f" > "sboms/${f}.gz"
+          done
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sboms-${{ matrix.profile }}
+          if-no-files-found: error
+          path: sboms
+          retention-days: 1
+
+
+  publish-artifacts:
+    name: Publish flash packages and SBOMs to S3
+    needs: [build-and-flash]
+    runs-on: [self-hosted, platform-prd-u2404-arm64-large-od-ephem]
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: Download console flash package artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rpm-artifacts-console
+          path: downloaded/rpm-artifacts-console
+
+      - name: Download gnome flash package artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rpm-artifacts-gnome
+          path: downloaded/rpm-artifacts-gnome
+
+      - name: Download console SBOM artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sboms-console
+          path: downloaded/sboms-console
+
+      - name: Download gnome SBOM artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sboms-gnome
+          path: downloaded/sboms-gnome
 
       - name: Stage flash packages for publishing
         run: |
           set -euo pipefail
           mkdir -p rpm-artifacts
-          for d in build/out/flash_*; do
-            [ -d "$d" ] || continue
-            board="$(basename "$d")"
-            tar -czf "rpm-artifacts/${board}.tar.gz" -C "$d" .
-          done
+          cp -a downloaded/rpm-artifacts-console/*.tar.gz rpm-artifacts/
+          cp -a downloaded/rpm-artifacts-gnome/*.tar.gz rpm-artifacts/
           (cd rpm-artifacts && sha256sum $(find . -maxdepth 1 -type f) | tee sha256sums.txt)
 
       - name: Upload artifacts (S3)
@@ -224,9 +300,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p sboms
-          for f in rootfs-sbom.*; do
-            gzip -c "$f" > "sboms/${f}.gz"
-          done
+          cp -a downloaded/sboms-console/*.gz sboms/
+          cp -a downloaded/sboms-gnome/*.gz sboms/
 
       - name: Upload SBOMs (S3)
         uses: qualcomm-linux/upload-private-artifact-action@4940e9327cd7386acdb908b61c714c079b7d754b # aws-v4
@@ -252,12 +327,12 @@ jobs:
 
   build-successful:
     name: Build Successful
-    needs: [build-and-flash]
+    needs: [publish-artifacts]
     runs-on: ubuntu-latest
     steps:
       - name: Print download URL
         env:
-          build_url: ${{ needs.build-and-flash.outputs.url }}
+          build_url: ${{ needs.publish-artifacts.outputs.url }}
         run: |
           echo "Downloads URL: ${build_url}"
           echo "## Download URL" >> $GITHUB_STEP_SUMMARY
