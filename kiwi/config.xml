@@ -164,6 +164,11 @@
   <packages type="image" profiles="gnome">
     <namedCollection name="GNOME"/>
 
+    <!-- Audio -->
+    <package name="audioreach-dkms"/>
+    <package name="audioreach-pal"/>
+    <package name="audioreach-pipewire-plugin"/>
+
     <!-- Camera -->
     <package name="camx-dkms"/>
     <package name="camx-firmware-kodiak"/>
