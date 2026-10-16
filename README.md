@@ -78,6 +78,16 @@ To build the GNOME desktop variant instead of the headless console image:
 make image KIWI_PROFILE=gnome
 ```
 
+To build a performance variant, which quiets the serial console
+(`quiet systemd.tty.term.console=dumb`) to avoid the boot-time and CPU cost
+of synchronous output over the slow UART console, use the combined
+`console-performance` or `gnome-performance` profile:
+
+```bash
+make image KIWI_PROFILE=console-performance
+make image KIWI_PROFILE=gnome-performance
+```
+
 #### Adding extra firmware
 
 Place any firmware not available in `linux-firmware` under
@@ -104,10 +114,11 @@ make flash TARGET_BOARDS=qcs6490-rb3gen2
 
 `scripts/generate_flat_build.sh` downloads Qualcomm boot binaries and CDT
 files, generates GPT partition tables via `qcom-ptool`, and assembles a
-complete per-board flash directory ready for QDL:
+complete per-board flash directory ready for QDL. Flash outputs are
+named with the active `KIWI_PROFILE`:
 
 ```
-build/out/flash_qcs6490-rb3gen2_ufs/
+build/out/console-performance-flash_qcs6490-rb3gen2_ufs/
 ├── prog_firehose_ddr_*.elf   # Firehose programmer
 ├── rawprogram*.xml           # Flash programming script
 ├── patch*.xml                # Patch script
@@ -146,9 +157,10 @@ different kit, swap in the matching CDT file (e.g. `cdt_core_kit.bin`) for
 | Variable | Default | Description |
 |---|---|---|
 | `ARCH` | `aarch64` | Target architecture passed to kiwi-ng |
-| `KIWI_PROFILE` | `console` | Image profile: `console` (headless) or `gnome` (desktop) |
+| `KIWI_PROFILE` | `console` | Image profile: `console` (headless), `gnome` (desktop), `console-performance` (headless with quiet serial console), or `gnome-performance` (desktop with quiet serial console) |
 | `TARGET_BOARDS` | `qcs6490-rb3gen2` | Comma-separated boards (or `all`) for `make flash` |
 | `USE_FIT_IMAGE` | `1` | `1` = FIT multi-DTB image (recommended); `0` = single-DTB VFAT |
+| `BUILD_OUTPUT` | `build/output` | kiwi image build/output directory |
 | `ARTIFACTDIR` | `build/out` | Flash package output directory |
 | `EXTRA_FLASH_OPTS` | _unset_ | Extra flags forwarded to `generate_flat_build.sh` |
 | `EXTRA_KIWI_OPTS` | _unset_ | Extra flags forwarded to `kiwi-ng` |

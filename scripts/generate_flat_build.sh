@@ -22,6 +22,7 @@ VMLINUX_SRC="${VMLINUX_SRC:-}"        #optional override to a real kernel vmlinu
 ROOTDIR="${ROOTDIR:-$PWD/work}"
 ARTIFACTDIR="${ARTIFACTDIR:-$PWD/build/out}"
 DOWNLOADDIR="${DOWNLOADDIR:-$PWD/downloads}"
+FLASH_DIR_PREFIX="${FLASH_DIR_PREFIX:-${KIWI_PROFILE_SLUG:+${KIWI_PROFILE_SLUG}-}}"
 
 QCOM_PTOOL_URL="https://github.com/qualcomm-linux/qcom-ptool/archive/0b3897c9c10d41752e431744c8a5a6502a27828e.tar.gz"
 QCOM_PTOOL_TARBALL="$DOWNLOADDIR/qcom-ptool.tar.gz"
@@ -64,7 +65,7 @@ VFAT options (advanced):
   VFAT_MIN_KIB                      default: $VFAT_MIN_KIB
   VFAT_SECTOR_SIZE                  default: $VFAT_SECTOR_SIZE
 Outputs:
-   \$ARTIFACTDIR/flash_<board>_ufs/
+   \$ARTIFACTDIR/\${KIWI_PROFILE_SLUG:+\$KIWI_PROFILE_SLUG-}flash_<board>_ufs/
 EOF
 }
 
@@ -837,7 +838,7 @@ for ((i=0; i<BOARD_COUNT; i++)); do
             "$dtb_filename"
 
         disk_type="$(cat "${BUILD_DIR}/ptool/${platform}/disk_type")"
-        flash_dir="${ARTIFACTDIR}/flash_${name}_${disk_type}"
+        flash_dir="${ARTIFACTDIR}/${FLASH_DIR_PREFIX}flash_${name}_${disk_type}"
         rm -rf "$flash_dir"
         mkdir -p "$flash_dir"
 
