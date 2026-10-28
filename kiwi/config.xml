@@ -173,7 +173,9 @@
   </packages>
 
   <packages type="image" profiles="gnome,gnome-performance">
+    <!-- Gnome -->
     <namedCollection name="GNOME"/>
+    <package name="adwaita-sans-fonts"/>
 
     <!-- Audio -->
     <package name="audioreach-dkms"/>
