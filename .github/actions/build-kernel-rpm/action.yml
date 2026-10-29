@@ -67,5 +67,16 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        python3 scripts/build_binrpm_pkg.py \
-          --local-dir "$GITHUB_WORKSPACE/linux"
+        build_args=(--local-dir "$GITHUB_WORKSPACE/linux")
+        config_dir="$GITHUB_WORKSPACE/kernel-configs"
+        if [[ -d "$config_dir" ]]; then
+          mapfile -t config_fragments < <(find "$config_dir" -maxdepth 1 -type f -name '*.config' | sort)
+          if (( ${#config_fragments[@]} > 0 )); then
+            build_args+=("${config_fragments[@]}")
+          else
+            echo "No kernel config fragments found in ${config_dir}"
+          fi
+        else
+          echo "No kernel config directory found: ${config_dir}"
+        fi
+        python3 scripts/build_binrpm_pkg.py "${build_args[@]}"
